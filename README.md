@@ -7,15 +7,20 @@ This project solves the "blank page problem" when applying for jobs. It uses **R
 ## ⚡️ Tech Stack
 
 * **Framework:** [LangChain](https://www.langchain.com/)
-* **Inference Engine:** [Groq](https://groq.com/) (Llama 3 8B)
-* **Document Processing:** PyPDF2
+* **Inference Engine:** [Groq](https://groq.com/) (Llama 3 8B by default)
+
+  You can override the default model by setting `GROQ_MODEL` in the `.env` file
+  or your shell environment; choose a model you have access to via your Groq
+  account.
+* **Document Processing:** pypdf
 * **Interface:** Streamlit
 
 ## 🎯 Features
 
-* **Resume Parsing:** Extracts text from PDF resumes automatically.
+* **Resume Parsing:** Extracts text from PDF resumes automatically using `pypdf`.
 * **Contextual Matching:** Maps candidate skills to job requirements using LLM reasoning.
 * **Fast Generation:** Generates a professional draft in seconds using Groq's LPU.
+* **Error Feedback:** Authentication or model issues surface directly in the Streamlit interface.
 
 ## 🚀 Setup & Run
 
@@ -40,3 +45,7 @@ This project solves the "blank page problem" when applying for jobs. It uses **R
     ```bash
     streamlit run app.py
     ```
+
+> ⚠️ If you encounter a decommissioned model error or a *model not found* error,
+> edit `app.py` (or set `GROQ_MODEL` in the `.env` file) and choose a
+> currently supported model that your Groq plan permits.

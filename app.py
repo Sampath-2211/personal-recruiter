@@ -1,23 +1,28 @@
 import streamlit as st
 import os
-import PyPDF2
+from pypdf import PdfReader
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from dotenv import load_dotenv
 
+# error types from groq for cleaner messages
+from groq import AuthenticationError, BadRequestError, NotFoundError
+
 # Loading my keys
 load_dotenv()
 
 # --- CONFIGURATION --- #
-# I'm using Llama 3 8B here because it's fast and sufficient for drafting
-GROQ_MODEL = "llama3-8b-8192"
+# The Groq model to use. You can override via environment variable if you
+# don't want to edit this file directly. Pick one you have access to via
+# your Groq console.
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
 def get_pdf_text(pdf_file):
     """
     My helper function to extract raw text from the uploaded PDF.
     """
-    reader = PyPDF2.PdfReader(pdf_file)
+    reader = PdfReader(pdf_file)
     text = ""
     for page in reader.pages:
         text += page.extract_text()
@@ -28,10 +33,14 @@ def generate_cover_letter(cv_text, job_desc):
     This is where the magic happens. 
     I'm instructing the LLM to map my skills to the job requirements.
     """
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("GROQ_API_KEY is not set. Please set it in your .env file.")
+
     llm = ChatGroq(
         temperature=0.7, 
         model_name=GROQ_MODEL, 
-        api_key=os.getenv("GROQ_API_KEY")
+        api_key=api_key
     )
     
     template = """
@@ -57,7 +66,22 @@ def generate_cover_letter(cv_text, job_desc):
     prompt = PromptTemplate.from_template(template)
     chain = prompt | llm | StrOutputParser()
     
-    return chain.invoke({"cv": cv_text, "job": job_desc})
+    try:
+        return chain.invoke({"cv": cv_text, "job": job_desc})
+    except AuthenticationError:
+        raise ValueError("Failed to authenticate with Groq. Check GROQ_API_KEY.")
+    except NotFoundError:
+        raise ValueError(
+            "The specified model does not exist or you lack access. "
+            "Verify GROQ_MODEL and your Groq plan."
+        )
+    except BadRequestError as err:
+        msg = str(err)
+        if "decommissioned" in msg or "no longer supported" in msg:
+            raise ValueError(
+                "Requested model is unavailable; update GROQ_MODEL to a current model (e.g. 'llama3-8b')."
+            )
+        raise
 
 # --- MY STREAMLIT UI --- #
 st.set_page_config(page_title="Sampath's AI Recruiter", page_icon="🚀")
@@ -82,10 +106,13 @@ if st.button("Generate Cover Letter"):
             cv_text = get_pdf_text(uploaded_file)
             
             # Step 2: Generate the letter
-            cover_letter = generate_cover_letter(cv_text, job_desc)
-            
-            st.success("Draft Generated!")
-            st.subheader("My Personalized Cover Letter")
-            st.text_area("Copy this:", value=cover_letter, height=400)
+            try:
+                cover_letter = generate_cover_letter(cv_text, job_desc)
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                st.success("Draft Generated!")
+                st.subheader("My Personalized Cover Letter")
+                st.text_area("Copy this:", value=cover_letter, height=400)
     else:
         st.error("I need both a CV and a Job Description to proceed.")
